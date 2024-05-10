@@ -1,0 +1,63 @@
+# Template for stages to release user containers to all environments.  Reference from within "full" builds.
+
+parameters:
+  containerSrcDirectory: ""  # Mandatory: the path, from the root of the repo, to the user container source directory.
+  timeoutInMinutes: 20       # Optional: override to change the job timeout in minutes.
+  cancelTimeoutInMinutes: 5  # Optional: override to change the job cancel timeout in minutes.
+
+stages:
+- stage: Release_Dev
+  dependsOn: Build
+  displayName: "Release to Dev"
+  jobs:
+  - template: Container-ReleaseSingleEnvironment.yaml
+    parameters:
+      environmentName: DEV
+      azureSubscription: "Dev (e-Science) Azure Connection"
+      containerSrcDirectory: "${{ parameters.containerSrcDirectory }}"
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+      cancelTimeoutInMinutes: ${{ parameters.cancelTimeoutInMinutes }}
+- stage: Release_QA
+  dependsOn: Build
+  displayName: "Release to QA"
+  jobs:
+  - template: Container-ReleaseSingleEnvironment.yaml
+    parameters:
+      environmentName: QA
+      azureSubscription: "QA (e-Science) Azure Connection"
+      containerSrcDirectory: "${{ parameters.containerSrcDirectory }}"
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+      cancelTimeoutInMinutes: ${{ parameters.cancelTimeoutInMinutes }}
+- stage: Release_Sbx
+  dependsOn: Build
+  displayName: "Release to Sandbox"
+  jobs:
+  - template: Container-ReleaseSingleEnvironment.yaml
+    parameters:
+      environmentName: SBX
+      azureSubscription: "Sandbox (e-Science) Azure Connection"
+      containerSrcDirectory: "${{ parameters.containerSrcDirectory }}"
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+      cancelTimeoutInMinutes: ${{ parameters.cancelTimeoutInMinutes }}
+- stage: Release_Stage
+  dependsOn: Build
+  displayName: "Release to Staging"
+  jobs:
+  - template: Container-ReleaseSingleEnvironment.yaml
+    parameters:
+      environmentName: STAGE
+      azureSubscription: "Staging (e-Science) Azure Connection"
+      containerSrcDirectory: "${{ parameters.containerSrcDirectory }}"
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+      cancelTimeoutInMinutes: ${{ parameters.cancelTimeoutInMinutes }}
+- stage: Release_Prod
+  dependsOn: Build
+  displayName: "Release to Production"
+  jobs:
+  - template: Container-ReleaseSingleEnvironment.yaml
+    parameters:
+      environmentName: PROD
+      azureSubscription: "Prod (e-Science) Azure Connection"
+      containerSrcDirectory: "${{ parameters.containerSrcDirectory }}"
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+      cancelTimeoutInMinutes: ${{ parameters.cancelTimeoutInMinutes }}
