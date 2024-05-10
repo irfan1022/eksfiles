@@ -1,0 +1,307 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${BD4BS_DEOHUT_API_SERVER_NAME}
+  namespace: "${BD4BS_SYSTEM_NAMESPACE}"
+  labels:
+    name: ${BD4BS_DEOHUT_API_SERVER_NAME}
+    type: "bd4bs-component"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ${BD4BS_DEOHUT_API_SERVER_NAME}
+      stack: "deohut"
+      type: "bd4bs-component"
+  template:
+    metadata:
+      labels:
+        app: ${BD4BS_DEOHUT_API_SERVER_NAME}
+        stack: "deohut"
+        type: "bd4bs-component"
+        interruptible: "false"
+    spec:
+      imagePullSecrets:
+        - name: acr-auth
+      priorityClassName: datalab-priority
+      # We don't want to automatically add 8 environment variables for every other service,
+      # as some images cannot cope with this - https://github.com/kubernetes/kubernetes/issues/84539
+      enableServiceLinks: false
+      hostname: "deohut-${BD4BS_SYSTEM_NAMESPACE}"
+      containers:
+        - name: deohutbackend
+          image: "${BD4BS_SYSTEM_ACR_URI}/deohutbackend:${BD4BS_RELEASE_NUMBER}"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: "BD4BS_AUTHORITY_CERTIFICATE"
+            valueFrom:
+              configMapKeyRef:
+                name: "${BD4BS_CERTIFICATE_AUTHORITY_CONFIGMAP_NAME}"
+                key: "authorityCertificate"
+          - name: "CLIENT_CERTIFICATE"
+            valueFrom:
+              secretKeyRef:
+                name: "${BD4BS_INTERNAL_CLIENT_CERTIFICATE_SECRET_NAME}"
+                key: "certificate"
+          - name: "CLIENT_CERTIFICATE_KEY"
+            valueFrom:
+              secretKeyRef:
+                name: "${BD4BS_INTERNAL_CLIENT_CERTIFICATE_SECRET_NAME}"
+                key: "key"
+          - name: "SERVER_CERTIFICATE"
+            valueFrom:
+              secretKeyRef:
+                name: "${BD4BS_INTERNAL_SERVER_CERTIFICATE_SECRET_NAME}"
+                key: "certificate"
+          - name: "SERVER_CERTIFICATE_KEY"
+            valueFrom:
+              secretKeyRef:
+                name: "${BD4BS_INTERNAL_SERVER_CERTIFICATE_SECRET_NAME}"
+                key: "key"
+          - name: POSTGRES_HOST
+            value: ${DEOHUT_DB_DOMAIN}
+            # - name: ALLOWED_HOSTS
+            #   value: "${ALLOWED_HOSTS}"
+          - name: POSTGRES_DB
+            value: deohutdb
+          - name: POSTGRES_USER
+            value: postgrerbacadmin
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: deohut-db-password
+                key: token
+          - name: BLOBSASTOKEN
+            value: ${BD4BS_DEOHUT_PASSWORD_DECRYPT}
+          ports:
+            - name: deohutbapiport
+              containerPort: ${BD4BS_DEOHUT_API_INTERNAL_PORT}
+              protocol: TCP
+          resources:
+            requests:
+              memory: "${DEOHUT_BACKEND_MEMORY_REQUEST}"
+              cpu: "${DEOHUT_BACKEND_CPU_REQUEST}"
+            limits:
+              memory: "${DEOHUT_BACKEND_MEMORY_LIMIT}"
+              cpu: "${DEOHUT_BACKEND_CPU_LIMIT}"
+          volumeMounts:
+            - name: deohut-backend-database
+              mountPath: /app/filestorage
+
+      volumes:
+        - name: deohut-backend-database
+          persistentVolumeClaim:
+            claimName: deohut-backend-storage
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${BD4BS_DEOHUT_SERVER_NAME}
+  namespace: "${BD4BS_SYSTEM_NAMESPACE}"
+  labels:
+    name: ${BD4BS_DEOHUT_SERVER_NAME}
+    type: "bd4bs-component"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ${BD4BS_DEOHUT_SERVER_NAME}
+      stack: "deohut"
+      type: "bd4bs-component"
+  template:
+    metadata:
+      labels:
+        app: ${BD4BS_DEOHUT_SERVER_NAME}
+        stack: "deohut"
+        type: "bd4bs-component"
+        interruptible: "false"
+    spec:
+      imagePullSecrets:
+        - name: acr-auth
+      priorityClassName: datalab-priority
+      # We don't want to automatically add 8 environment variables for every other service,
+      # as some images cannot cope with this - https://github.com/kubernetes/kubernetes/issues/84539
+      enableServiceLinks: false
+      hostname: "deohut-${BD4BS_SYSTEM_NAMESPACE}"
+      containers:
+        - name: deohutfrontend
+          image: "${BD4BS_SYSTEM_ACR_URI}/deohutfrontend:${DEOHUT_FRONTEND_CONTAINER_TAG}"
+          command: ["npm", "run"] 
+          args: ["${DEOHUT_FRONTEND_SCRIPT_START_ARG}"]
+          imagePullPolicy: Always
+          env:
+            - name: STAGE
+              value: "${DEOHUT_FRONTEND_CONTAINER_TAG}"
+          ports:
+            - name: deohutport
+              containerPort: 3000
+              protocol: TCP
+          resources:
+            requests:
+              memory: "1.5Gi"
+              cpu: "128m"
+            limits:
+              memory: "2.0Gi"
+              cpu: "512m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deohutdb
+  namespace: "${BD4BS_SYSTEM_NAMESPACE}"
+  labels:
+    name: deohutdb
+    type: "bd4bs-component"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: deohutdb
+      stack: "deohut"
+      type: "bd4bs-component"
+  template:
+    metadata:
+      labels:
+        app: deohutdb
+        stack: "deohut"
+        type: "bd4bs-component"
+        interruptible: "false"
+    spec:
+      imagePullSecrets:
+        - name: acr-auth
+      priorityClassName: datalab-priority
+      # We don't want to automatically add 8 environment variables for every other service,
+      # as some images cannot cope with this - https://github.com/kubernetes/kubernetes/issues/84539
+      enableServiceLinks: false
+      hostname: "deohut-${BD4BS_SYSTEM_NAMESPACE}"
+      volumes:
+        - name: deohut-db-storage
+          persistentVolumeClaim:
+            claimName: deohut-db-storage
+      containers:
+        - name: deohutdb
+          image: postgres:15
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: deohutbdbport
+              containerPort: 5432
+              protocol: TCP
+          # lifecycle:
+          #   postStart:
+          #     exec:
+          #       command: ["/bin/chmod","777","/data/pgata"]
+          env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          - name: POSTGRES_DB
+            value: deohutdb
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_INITDB_ARGS
+            value: "-A md5"
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: deohut-db-secret
+                key: token
+
+          resources:
+            requests:
+              memory: "${DEOHUT_DB_MEMORY_REQUEST}"
+              cpu: "${DEOHUT_DB_CPU_REQUEST}"
+            limits:
+              memory: "${DEOHUT_DB_MEMORY_LIMIT}"
+              cpu: "${DEOHUT_DB_CPU_LIMIT}"
+          volumeMounts:
+           - name: deohut-db-storage
+             mountPath: /var/lib/postgresql/data
+             subPath: pgdata
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deohutdb-bk
+  namespace: "${BD4BS_SYSTEM_NAMESPACE}"
+  labels:
+    name: deohutdb-bk
+    type: "bd4bs-component"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: deohutdb-bk
+      stack: "deohut"
+      type: "bd4bs-component"
+  template:
+    metadata:
+      labels:
+        app: deohutdb-bk
+        stack: "deohut"
+        type: "bd4bs-component"
+        interruptible: "false"
+    spec:
+      imagePullSecrets:
+        - name: acr-auth
+      priorityClassName: datalab-priority
+      # We don't want to automatically add 8 environment variables for every other service,
+      # as some images cannot cope with this - https://github.com/kubernetes/kubernetes/issues/84539
+      enableServiceLinks: false
+      hostname: "deohut-${BD4BS_SYSTEM_NAMESPACE}"
+      volumes:
+        - name: deohut-db-storage
+          persistentVolumeClaim:
+            claimName: deohut-db-storage
+      containers:
+        - name: deohutdb
+          image: postgres:15
+          command: ["/bin/sh"]
+          args: ["-c", "sleep 3600"]
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: deohutbdbport
+              containerPort: 5432
+              protocol: TCP
+          # lifecycle:
+          #   postStart:
+          #     exec:
+          #       command: ["/bin/chmod","777","/data/pgata"]
+          env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          - name: POSTGRES_DB
+            value: deohutdb
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_INITDB_ARGS
+            value: "-A md5"
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: deohut-db-secret
+                key: token
+
+          resources:
+            requests:
+              memory: "${DEOHUT_DB_MEMORY_REQUEST}"
+              cpu: "${DEOHUT_DB_CPU_REQUEST}"
+            limits:
+              memory: "${DEOHUT_DB_MEMORY_LIMIT}"
+              cpu: "${DEOHUT_DB_CPU_LIMIT}"
+          volumeMounts:
+           - name: deohut-db-storage
+             mountPath: /var/lib/postgresql/data
+             subPath: pgdata
