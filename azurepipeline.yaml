@@ -1,0 +1,51 @@
+name: "build-$(SourceBranchName)-$(BuildID)"
+resources:
+  - repo: self
+    clean: true
+variables:
+  containerRegistry: "bnles0157280acr01.azurecr.io"
+trigger:
+  branches:
+    include:
+      - refs/heads/master
+      - refs/heads/release/*
+  paths:
+    include:
+      - containers/deohutbackend
+      - build/Containers
+      - deploy
+    exclude:
+    - containers/deohutbackend/*.md
+    - containers/deohutbackend/build/prBuild.yaml
+    - build/Containers/Container-PrBuild.yaml
+    - deploy/platform
+    - deploy/mme
+    - deploy/deployPlatform.sh
+    - deploy/deployService.sh
+    - deploy/*.md
+    - services
+stages:
+- stage: Build
+  displayName: "Build"
+  jobs:
+  - job: Full_Build_deohutbackend
+    timeoutInMinutes: 60
+    cancelTimeoutInMinutes: 10
+    pool:
+      vmImage: 'ubuntu-20.04'
+    variables:
+    - group: 'wiz_credentials' 
+    steps:
+    - task: DeleteFiles@1
+      displayName: 'Clean artifact staging directory'
+      inputs:
+        sourceFolder: "$(Build.ArtifactStagingDirectory)"
+        contents: "**"
+    - template: ../../../build/Containers/Container-FullBuild.yaml
+      parameters:
+        containerSrcDirectory: "containers/deohutbackend"
+        imageName: "deohutbackend"
+        containerRegistry: "$(containerRegistry)"
+- template: ../../../build/Containers/Container-Release.yaml
+  parameters:
+    containerSrcDirectory: "containers/deohutbackend"
